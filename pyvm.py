@@ -1,4 +1,81 @@
+#!/bin/bash
+# region preamble
+""":"
+set -euo pipefail
+
+# These values will have to be hard-coded for now until i find a better way to aquire them within this limited bash context
+SELF_PY_VERSION=3.12.1
+SELF_RELEASE_DATE=20240107
+
+# bootstrap self
+export PYVM_HOME=${PYVM_HOME:-$HOME/.pyvm}
+mkdir -p $PYVM_HOME/tmp
+
+if [ -f "$PYVM_HOME/3.12/bin/python3.12" ]; then
+    exec "$PYVM_HOME/3.12/bin/python3.12" "$0" "$@"
+fi
+
+# define a function which selects curl or wget based on availability
+download() {
+    if command -v curl &> /dev/null; then
+        curl -s -L -o $1 $2
+    elif command -v wget &> /dev/null; then
+        wget -q -O $1 $2
+    else
+        echo "Neither curl nor wget found. Please install one of these packages."
+        exit 1
+    fi
+}
+
+case `uname -m` in
+    x86_64)
+        ARCH=x86_64_v3
+        ;;
+    arm64|aarch64)
+        ARCH=aarch64
+        ;;
+    *)
+        echo "Unsupported architecture: `uname -m`"
+        exit 1
+        ;;
+esac
+
+case `uname` in
+    Linux)
+        SUFFIX=unknown-linux-gnu-install_only.tar.gz
+        ;;
+    Darwin)
+        SUFFIX=apple-darwin-install_only.tar.gz
+        ;;
+    *)
+        echo "Unsupported OS: `uname`"
+        exit 1
+        ;;
+esac
+
+# download and install python
+echo "bootstrapping with python 3.12..."
+archive="cpython-${SELF_PY_VERSION}+${SELF_RELEASE_DATE}-${ARCH}-${SUFFIX}"
+download "$PYVM_HOME/tmp/$archive" "https://github.com/indygreg/python-build-standalone/releases/download/${SELF_RELEASE_DATE}/${archive}"
+pushd $PYVM_HOME/tmp
+tar -xvf "$archive"
+mv "$PYVM_HOME/tmp/python" "$PYVM_HOME/3.12"
+popd
+rm -rf $PYVM_HOME/tmp
+
+exec "$PYVM_HOME/3.12/bin/python3.12" "$0" "$@"
+"""
+# endregion
+
+# ruff: noqa: E401 EXE003 A001
 import os
+__doc__ = f"""Python Version Manager
+
+This tool is designed to download and install python versions from the 
+https://github.com/indygreg/python-build-standalone project into {os.environ.get('PYVM_HOME', '$HOME/.pyvm')}
+and symlink versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
+
+"""
 import sys
 import argparse
 import datetime
