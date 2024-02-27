@@ -131,6 +131,26 @@ class NotAvailable(Exception):
 logger = logging.getLogger(__name__)
 
 
+def _installed_versions():
+    for installed_version in PYVM_HOME.glob('3.*/bin'):
+        major_minor = installed_version.parent.name
+        installed_bin = installed_version / f'python{major_minor}'
+        yield major_minor, installed_bin
+
+
+def list_available_versions():
+    pythons = _list_pythons()
+    installed_pythons = [major_minor for major_minor, _ in _installed_versions()]
+    logger.info("Available python versions:")
+    pythons = [version.split('.') for version in pythons]
+    pythons = sorted(pythons, key=lambda version: [int(k) for k in version])
+    for version in pythons:
+        msg = f"{version[0]}.{version[1]:2} --> {version[0]}.{version[1]}.{version[2]}"
+        if f"{version[0]}.{version[1]}" in installed_pythons:
+            msg += " (installed)"
+        logger.info(msg)
+
+
 def install_version(version: str):
     version = _normalize_python_version(version)
     python_bin = download_python_build_standalone(version)
@@ -310,6 +330,9 @@ def main():
 
     match args.command:
         case 'install':
+            if not args.version:
+                list_available_versions()
+                exit(1)
             install_version(args.version)
         case None:
             parser.print_help()
