@@ -342,6 +342,25 @@ def _resolve_python_version(requested_version: str):
     return python_version, download_link
 
 
+
+def _verify_symlinks():
+    for installed_version in PYVM_HOME.glob('3.*/bin'):
+        major_minor = installed_version.parent.name
+        installed_bin = installed_version / f'python{major_minor}'
+        symlink = PYVM_BIN / f'python{major_minor}'
+        if symlink.exists() and not symlink.is_symlink():
+            print(f'python{major_minor} is installed in PATH but is not a symlink. Please delete and re-run this command')
+            continue
+        if symlink.exists() and symlink.resolve() != installed_bin:
+            print(f'python{major_minor} is installed in PATH but symlinked to {symlink.resolve()}. Please delete and re-run this command')
+            continue
+        if symlink.exists():
+            print(f'python{major_minor} is installed in PATH and symlinked')
+            continue
+        symlink.symlink_to(target=installed_bin)
+        print(f'python{major_minor} is installed in PATH and symlinked')
+
+
 def main():
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format='%(message)s')
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -349,6 +368,8 @@ def main():
     list_parser = subparsers.add_parser('list', help='List installed python versions')
     install_parser = subparsers.add_parser('install', help='Install a python version')
     install_parser.add_argument('version', nargs='?', help='The version of python to install')
+    update_parser = subparsers.add_parser('update', help='Update installed python versions')
+
     args = parser.parse_args()
 
     match args.command:
@@ -359,6 +380,8 @@ def main():
                 list_available_versions()
                 exit(1)
             install_version(args.version)
+        case 'update':
+            print('update')
         case None:
             parser.print_help()
             exit(1)
