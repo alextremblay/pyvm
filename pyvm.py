@@ -137,6 +137,17 @@ def _installed_versions():
         installed_bin = installed_version / f'python{major_minor}'
         yield major_minor, installed_bin
 
+def list_installed_versions():
+    installations_found = False
+    for major_minor, _ in _installed_versions():
+        msg = f'python{major_minor} is installed'
+        if (symlink := PYVM_BIN / f'python{major_minor}').exists():
+            msg += f' and symlinked to {symlink.resolve()}'
+        logger.info(msg)
+        installations_found = True
+    if not installations_found:
+        logger.info('No python installations installed through pyvm')
+
 
 def list_available_versions():
     pythons = _list_pythons()
@@ -324,11 +335,14 @@ def main():
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format='%(message)s')
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(dest='command')
+    list_parser = subparsers.add_parser('list', help='List installed python versions')
     install_parser = subparsers.add_parser('install', help='Install a python version')
     install_parser.add_argument('version', nargs='?', help='The version of python to install')
     args = parser.parse_args()
 
     match args.command:
+        case 'list':
+            list_installed_versions()
         case 'install':
             if not args.version:
                 list_available_versions()
