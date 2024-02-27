@@ -1,0 +1,26 @@
+
+[build-system]
+requires = ["hatchling >= 1.6.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyvm_cli"
+description = "dead-simple python version manager powered by python-build-standalone"
+authors = [
+    { name = "Alex Tremblay", email = "alex.tremblay@utoronto.ca" },
+]
+requires-python = ">=3.6"
+readme = "README.md"
+version = "0.1.0"
+
+license = { text = "MIT" }
+
+[project.urls]
+Repository = "https://github.com/alextremblay/pyvm"
+Homepage = "https://alextremblay.github.io/pyvm/"
+
+[project.scripts]
+pyvm = "pyvm:main"
+
+[tool.hatch.build]
+packages = ["pyvm"]
