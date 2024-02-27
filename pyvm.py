@@ -168,7 +168,18 @@ def install_version(version: str):
     _link_python_binary(python_bin, version)
 
 
+def _ensure_pyvm_bin_dir():
+    Path(PYVM_BIN).mkdir(parents=True, exist_ok=True)
+    for bin_dir in os.environ['PATH'].split(os.pathsep):
+        if PYVM_BIN.samefile(bin_dir):
+            return
+    else:
+        print(f'Please add {PYVM_BIN} to your PATH')
+        print(f'Ex, add the following to your shell profile: export PATH=$PATH:{PYVM_BIN}')
+
+
 def _link_python_binary(path: str, version: str):
+    _ensure_pyvm_bin_dir()
     Path(PYVM_BIN / f'python{version}').symlink_to(path)
 
 
