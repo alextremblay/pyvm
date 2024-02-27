@@ -5,6 +5,15 @@ dead-simple python version manager powered by [python-build-standalone](https://
 
 # Installation
 
+## If you already have python3
+
+```console
+python3 -m pip install pyvm-cli
+
+pyvm install 3.12 # for example
+```
+
+
 
 ```console
 mkdir -p ~/.local/bin
