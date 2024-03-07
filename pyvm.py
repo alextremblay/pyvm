@@ -131,12 +131,6 @@ class NotAvailable(Exception):
 logger = logging.getLogger(__name__)
 
 
-def _installed_versions():
-    for installed_version in PYVM_HOME.glob('3.*/bin'):
-        major_minor = installed_version.parent.name
-        installed_bin = installed_version / f'python{major_minor}'
-        yield major_minor, installed_bin
-
 def list_installed_versions():
     installations_found = False
     for major_minor, _ in _installed_versions():
@@ -164,8 +158,48 @@ def list_available_versions():
 
 def install_version(version: str):
     version = _normalize_python_version(version)
+    if python_bin := _installed_version(version):
+        logger.warning(f'Python version {version} is already installed')
+        return python_bin
     python_bin = download_python_build_standalone(version)
     _link_python_binary(python_bin, version)
+    return python_bin
+
+
+def verify_version(version: str):
+    version = _normalize_python_version(version)
+    if (python_bin := _installed_version(version)):
+        return python_bin
+    else:
+        return install_version(version)
+
+
+def uninstall_version(version: str):
+    version = _normalize_python_version(version)
+    _uninstall_version(version)
+    _unlink_python_binary(version)
+
+
+def _installed_versions():
+    for installed_version in PYVM_HOME.glob('3.*/bin'):
+        major_minor = installed_version.parent.name
+        installed_bin = installed_version / f'python{major_minor}'
+        yield major_minor, installed_bin
+
+
+def _installed_version(version: str):
+    for major_minor, installed_bin in _installed_versions():
+        if major_minor == version:
+            return installed_bin
+    return None
+
+
+def _uninstall_version(version: str):
+    if not _installed_version(version):
+        logger.warning(f'Python version {version} is not installed')
+        return
+    shutil.rmtree(PYVM_HOME / version)
+    logger.info(f'Uninstalled python {version}')
 
 
 def _ensure_pyvm_bin_dir():
@@ -183,6 +217,15 @@ def _link_python_binary(path: str, version: str):
     Path(PYVM_BIN / f'python{version}').symlink_to(path)
 
 
+def _unlink_python_binary(version: str):
+    # only unlink if the symlink points to a pyvm python
+    symlink = PYVM_BIN / f'python{version}'
+    if symlink.is_symlink():
+        if symlink.resolve().parent == PYVM_HOME / version / 'bin':
+            symlink.unlink()
+            logger.info(f'Unlinked {symlink}')
+
+
 def _normalize_python_version(python_version: str) -> str:
     # python_version can be a bare version number like "3.9" or a "binary name" like python3.10
     # we'll convert it to a bare version number
@@ -194,7 +237,7 @@ def download_python_build_standalone(python_version: str):
     from https://github.com/indygreg/python-build-standalone
     and unpack it into the PYVM_HOME directory. 
     Returns the full path to the python binary within that build"""
-    python_bin = "python.exe" if WINDOWS else "python3"
+    python_bin = "python.exe" if WINDOWS else f"python{python_version}"
 
     install_dir = PYVM_HOME / python_version
     installed_python = install_dir / "bin" / python_bin
@@ -349,7 +392,14 @@ def main():
     list_parser = subparsers.add_parser('list', help='List installed python versions')
     install_parser = subparsers.add_parser('install', help='Install a python version')
     install_parser.add_argument('version', nargs='?', help='The version of python to install')
-    args = parser.parse_args()
+    uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall a python version')
+    uninstall_parser.add_argument('version', nargs='?', help='The version of python to install')
+    run_parser = subparsers.add_parser('run', help='Run a python version')
+    run_parser.add_argument('version', help='The version of python to run')
+    run_parser.add_argument('args', nargs=argparse.REMAINDER, help='Arguments to pass to the python binary')
+    update_parser = subparsers.add_parser('update', help='Update installed python versions')
+
+    args= parser.parse_args()
 
     match args.command:
         case 'list':
@@ -359,6 +409,14 @@ def main():
                 list_available_versions()
                 exit(1)
             install_version(args.version)
+        case 'uninstall':
+            assert args.version, 'Please specify a version to uninstall'
+            uninstall_version(args.version)
+        case 'run':
+            bin = verify_version(args.version)
+            os.execl(bin, bin, *args.args)
+        case 'update':
+            print('update')
         case None:
             parser.print_help()
             exit(1)
