@@ -58,7 +58,8 @@ echo "bootstrapping with python 3.12..."
 archive="cpython-${SELF_PY_VERSION}+${SELF_RELEASE_DATE}-${ARCH}-${SUFFIX}"
 download "$PYVM_HOME/tmp/$archive" "https://github.com/indygreg/python-build-standalone/releases/download/${SELF_RELEASE_DATE}/${archive}"
 pushd $PYVM_HOME/tmp
-tar -xvf "$archive"
+echo "extracting python 3.12..."
+tar -xvf "$archive" > /dev/null
 mv "$PYVM_HOME/tmp/python" "$PYVM_HOME/3.12"
 popd
 rm -rf $PYVM_HOME/tmp
@@ -161,6 +162,7 @@ def install_version(version: str):
     if python_bin := _installed_version(version):
         logger.warning(f'Python version {version} is already installed')
         return python_bin
+    logger.info(f'Installing python {version}...')
     python_bin = download_python_build_standalone(version)
     _link_python_binary(python_bin, version)
     return python_bin
@@ -208,11 +210,11 @@ def _ensure_pyvm_bin_dir():
         if PYVM_BIN.samefile(bin_dir):
             return
     else:
-        print(f'Please add {PYVM_BIN} to your PATH')
-        print(f'Ex, add the following to your shell profile: export PATH=$PATH:{PYVM_BIN}')
+        logger.warning(f'Please add {PYVM_BIN} to your PATH')
+        logger.warning(f'Ex, add the following to your shell profile: export PATH=$PATH:{PYVM_BIN}')
 
 
-def _link_python_binary(path: str, version: str):
+def _link_python_binary(path: Path, version: str):
     _ensure_pyvm_bin_dir()
     Path(PYVM_BIN / f'python{version}').symlink_to(path)
 
@@ -243,7 +245,7 @@ def download_python_build_standalone(python_version: str):
     installed_python = install_dir / "bin" / python_bin
 
     if installed_python.exists():
-        return str(installed_python)
+        return installed_python
 
     if install_dir.exists():
         logger.warning(f"A previous attempt to install python {python_version} failed. Retrying.")
@@ -270,7 +272,7 @@ def download_python_build_standalone(python_version: str):
         extracted_dir = download_dir / "python"
         extracted_dir.rename(install_dir)
 
-    return str(installed_python)
+    return installed_python
 
 
 def _download(full_version: str, download_link: str, archive: Path):
@@ -397,8 +399,7 @@ def main():
     run_parser = subparsers.add_parser('run', help='Run a python version')
     run_parser.add_argument('version', help='The version of python to run')
     run_parser.add_argument('args', nargs=argparse.REMAINDER, help='Arguments to pass to the python binary')
-    update_parser = subparsers.add_parser('update', help='Update installed python versions')
-
+    
     args= parser.parse_args()
 
     match args.command:
@@ -415,8 +416,6 @@ def main():
         case 'run':
             bin = verify_version(args.version)
             os.execl(bin, bin, *args.args)
-        case 'update':
-            print('update')
         case None:
             parser.print_help()
             exit(1)
