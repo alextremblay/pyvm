@@ -1,0 +1,128 @@
+# This compose file generates a variety of containers that can be used to test the pyvm script
+
+services:
+  ubuntu_no_downloader:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:latest
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+  
+  ubuntu_curl:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:latest
+        RUN apt-get update && apt-get install -y curl
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  ubuntu_wget:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:22.04
+        RUN apt-get update && apt-get install -y wget
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  ubuntu_20:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:20.04
+        RUN apt-get update && apt-get install -y wget
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  ubuntu_18:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:18.04
+        RUN apt-get update && apt-get install -y wget
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  ubuntu_16:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:xenial
+        RUN apt-get update && apt-get install -y wget
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  ubuntu_14:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:trusty
+        RUN apt-get update && apt-get install -y wget
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  fedora_40:
+    build:
+      dockerfile_inline: |
+        FROM fedora:40
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  fedora_38:
+    build:
+      dockerfile_inline: |
+        FROM fedora:38
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  fedora_36:
+    build:
+      dockerfile_inline: |
+        FROM fedora:36
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  fedora_34:
+    build:
+      dockerfile_inline: |
+        FROM fedora:34
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
+
+  fedora_32:
+    build:
+      dockerfile_inline: |
+        FROM fedora:32
+        RUN useradd -m -s /bin/bash testuser
+        USER testuser
+    command: tail -f /dev/null
+    volumes:
+      - ./pyvm.py:/pyvm
