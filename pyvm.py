@@ -76,6 +76,9 @@ This tool is designed to download and install python versions from the
 https://github.com/indygreg/python-build-standalone project into {os.environ.get('PYVM_HOME', '$HOME/.pyvm')}
 and add versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
 
+Environment Variables:
+    PYVM_HOME: The directory to install python versions into. Defaults to $HOME/.pyvm
+    PYVM_BIN: The directory to install versioned executables into. Defaults to $HOME/.local/bin
 """
 import sys
 import argparse
@@ -134,7 +137,7 @@ logger = logging.getLogger(__name__)
 
 def list_installed_versions():
     installations_found = False
-    for major_minor, _ in _installed_versions():
+    for major_minor, path in _installed_versions():
         msg = f'python{major_minor} is installed'
         _ensure_shim(path, major_minor)
         logger.info(msg)
@@ -150,24 +153,27 @@ def list_available_versions():
     pythons = [version.split('.') for version in pythons]
     pythons = sorted(pythons, key=lambda version: [int(k) for k in version])
     for version in pythons:
-        msg = f"{version[0]}.{version[1]:2} --> {version[0]}.{version[1]}.{version[2]}"
-        if f"{version[0]}.{version[1]}" in installed_pythons:
+        major, minor, patch, *_ = version
+        msg = f"{major}.{minor:2} --> {major}.{minor}.{patch}"
+        if f"{major}.{minor}" in installed_pythons:
             msg += " (installed)"
         logger.info(msg)
 
 
 def install_version(version: str):
+    """Install the given python version and return the path to the python binary."""
     version = _normalize_python_version(version)
     if python_bin := _installed_version(version):
         logger.warning(f'Python version {version} is already installed')
         return python_bin
     logger.info(f'Installing python {version}...')
-    python_bin = download_python_build_standalone(version)
+    python_bin = _download_python_build_standalone(version)
     _ensure_shim(python_bin, version)
     return python_bin
 
 
-def verify_version(version: str):
+def ensure_version(version: str):
+    """Ensure that the given python version is installed and return the path to the python binary."""
     version = _normalize_python_version(version)
     if (python_bin := _installed_version(version)):
         return python_bin
@@ -246,7 +252,7 @@ def _normalize_python_version(python_version: str) -> str:
     return re.sub(r"[c]?python", "", python_version)
 
 
-def download_python_build_standalone(python_version: str):
+def _download_python_build_standalone(python_version: str):
     """Attempt to download and use an appropriate python build
     from https://github.com/indygreg/python-build-standalone
     and unpack it into the PYVM_HOME directory. 
@@ -330,15 +336,15 @@ def _get_or_update_index():
     else:
         index = {}
     if not index:
-        releases = _get_latest_python_releases()
-        index = {"fetched": datetime.datetime.now().timestamp(), "releases": releases}
+        assets = _get_github_release_assets()
+        index = {"fetched": datetime.datetime.now().timestamp(), "assets": assets}
         # update index
         index_file.write_text(json.dumps(index))
     return index
 
 
-def _get_latest_python_releases() -> List[str]:
-    """Returns the list of python download links from the latest github release."""
+def _get_github_release_assets() -> List[str]:
+    """Returns the list of python download links from the latest github release, or a specific python-build-standalone release if specified."""
     try:
         with urlopen(GITHUB_API_URL) as response:
             release_data = json.load(response)
@@ -360,9 +366,9 @@ def _list_pythons() -> Dict[str, str]:
         libc_version = platform.libc_ver()[0] or "musl"
         download_link_suffix = download_link_suffix[libc_version]
 
-    python_releases = _get_or_update_index()["releases"]
+    python_assets = _get_or_update_index()["assets"]
 
-    available_python_links = [link for link in python_releases if link.endswith(download_link_suffix)]
+    available_python_links = [link for link in python_assets if link.endswith(download_link_suffix)]
 
     python_versions: dict[str, str] = {}
     for link in available_python_links:
@@ -426,7 +432,7 @@ def main():
             assert args.version, 'Please specify a version to uninstall'
             uninstall_version(args.version)
         case 'run':
-            bin = verify_version(args.version)
+            bin = ensure_version(args.version)
             os.execl(bin, bin, *args.args)
         case None:
             parser.print_help()
