@@ -40,10 +40,17 @@ Make your script executable and add the following [shebang](https://linuxhandboo
 # Extra Info
 
 These python installations are isolated from any version of python that may already be installed on your system. They are installed into `~/.pyvm` by default, but this location can be changed by setting the `$PYVM_HOME` environment variable
-Every installed version of python gets symlinked into a folder on your PATH. By default, these symlinks are installed into `~/.local/bin`, but this location can be changed by setting the `$PYVM_BIN` environment variable
+Every installed version of python gets a small versioned shim added into a folder on your PATH. By default, these shims are installed into `~/.local/bin`, but this location can be changed by setting the `$PYVM_BIN` environment variable
 
-For example, the command `pyvm install 3.11` will install python 3.11 into `~/.pyvm/3.11`, and `~/.local/bin/python3.11` will be symlinked to `~/.pyvm/3.11/bin/python3.11`
+For example, the command `pyvm install 3.11` will install python 3.11 into `~/.pyvm/3.11`, and `~/.local/bin/python3.11` will be a shim which executes `~/.pyvm/3.11/bin/python3.11`
 
+## Why a shim, and not a symlink?
+A symlink would also work, but only in certain circumstances. with a symlink, the following works: opening a REPL, executing an expression with `python3.11 -c '<expr>'`, running a script with `python3.11 <script>.py`, piping python code into the interpreter like `echo 'print("hello")' | python3.11`, BUT one thing that **doesn't** work is executing a module:
+```console
+$ python3.12 -m venv test312
+Error: Command '['/home/atremblay/pyvm/test312/bin/python3.12', '-m', 'ensurepip', '--upgrade', '--default-pip']' returned non-zero exit status 1.
+```
+it seems in some cases, portable python fails to find its own lib folder when it's executed through a symlink. manually setting `$PYTHONHOME` to the installed location of the portable python distribution would fix this issue, but that would require a shim anyway.
 
 
 # Compatability

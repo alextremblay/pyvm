@@ -74,7 +74,7 @@ __doc__ = f"""Python Version Manager
 
 This tool is designed to download and install python versions from the 
 https://github.com/indygreg/python-build-standalone project into {os.environ.get('PYVM_HOME', '$HOME/.pyvm')}
-and symlink versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
+and add versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
 
 """
 import sys
@@ -136,8 +136,7 @@ def list_installed_versions():
     installations_found = False
     for major_minor, _ in _installed_versions():
         msg = f'python{major_minor} is installed'
-        if (symlink := PYVM_BIN / f'python{major_minor}').exists():
-            msg += f' and symlinked to {symlink.resolve()}'
+        _ensure_shim(path, major_minor)
         logger.info(msg)
         installations_found = True
     if not installations_found:
@@ -164,7 +163,7 @@ def install_version(version: str):
         return python_bin
     logger.info(f'Installing python {version}...')
     python_bin = download_python_build_standalone(version)
-    _link_python_binary(python_bin, version)
+    _ensure_shim(python_bin, version)
     return python_bin
 
 
@@ -179,7 +178,8 @@ def verify_version(version: str):
 def uninstall_version(version: str):
     version = _normalize_python_version(version)
     _uninstall_version(version)
-    _unlink_python_binary(version)
+    _remove_shim(version)
+
 
 
 def _installed_versions():
@@ -204,6 +204,21 @@ def _uninstall_version(version: str):
     logger.info(f'Uninstalled python {version}')
 
 
+def _ensure_shim(path: Path, version: str):
+    """Ensure that the python binary is available in the pyvm bin directory"""
+    # This needs to be a shim, rather than a symlink, for reasons explained in the README, 
+    # under heading `## Why a shim, and not a symlink?`
+    # The shim sets the TERMINFO_DIRS environment variable to include most common terminfo directories
+    # as a workaround to https://gregoryszorc.com/docs/python-build-standalone/main/quirks.html#backspace-key-doesn-t-work-in-python-repl
+    _ensure_pyvm_bin_dir()
+    shim = Path(PYVM_BIN / f'python{version}')
+    if not shim.exists():
+        logger.info(f'Creating shim for {version} at {shim}')
+        shim.write_text(f'#!/bin/sh\nexec {path} "$@"\n')
+        shim.chmod(0o755)
+    return shim
+
+
 def _ensure_pyvm_bin_dir():
     Path(PYVM_BIN).mkdir(parents=True, exist_ok=True)
     for bin_dir in os.environ['PATH'].split(os.pathsep):
@@ -214,18 +229,15 @@ def _ensure_pyvm_bin_dir():
         logger.warning(f'Ex, add the following to your shell profile: export PATH=$PATH:{PYVM_BIN}')
 
 
-def _link_python_binary(path: Path, version: str):
-    _ensure_pyvm_bin_dir()
-    Path(PYVM_BIN / f'python{version}').symlink_to(path)
-
-
-def _unlink_python_binary(version: str):
-    # only unlink if the symlink points to a pyvm python
-    symlink = PYVM_BIN / f'python{version}'
-    if symlink.is_symlink():
-        if symlink.resolve().parent == PYVM_HOME / version / 'bin':
-            symlink.unlink()
-            logger.info(f'Unlinked {symlink}')
+def _remove_shim(version: str):
+    # only remove the shim if it points to the version we're uninstalling
+    shim = PYVM_BIN / f'python{version}'
+    path = _installed_version(version)
+    if not path:
+        return
+    if str(path) in shim.read_text():
+        shim.unlink()
+        logger.info(f'Removed {shim}')
 
 
 def _normalize_python_version(python_version: str) -> str:
