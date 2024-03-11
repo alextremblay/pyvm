@@ -5,7 +5,7 @@ set -euo pipefail
 
 # These values will have to be hard-coded for now until i find a better way to aquire them within this limited bash context
 SELF_PY_VERSION=3.12.1
-SELF_RELEASE_DATE=20240107
+SELF_RELEASE_DATE=20240224
 
 # bootstrap self
 export PYVM_HOME=${PYVM_HOME:-$HOME/.pyvm}
