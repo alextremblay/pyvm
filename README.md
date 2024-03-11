@@ -37,6 +37,35 @@ Make your script executable and add the following [shebang](https://linuxhandboo
 #!/usr/bin/env pyvm run 3.12
 ```
 
+# Command Line Interface
+
+```console
+$ pyvm -h
+usage: pyvm [-h] {list,install,uninstall,update,run} ...
+
+Python Version Manager
+
+This tool is designed to download and install python versions from the 
+https://github.com/indygreg/python-build-standalone project into /home/atremblay/.pyvm
+and add versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
+
+Environment Variables:
+    PYVM_PBS_RELEASE: The release of python-build-standalone to target. Defaults to 'latest', can be set to a release name (eg '20240224')
+    PYVM_HOME: The directory to install python versions into. Defaults to $HOME/.pyvm
+    PYVM_BIN: The directory to install versioned executables into. Defaults to $HOME/.local/bin
+
+positional arguments:
+  {list,install,uninstall,update,run}
+    list                List installed python versions
+    install             Install a python version
+    uninstall           Uninstall a python version
+    update              Update all installed python versions
+    run                 Run a python version
+
+options:
+  -h, --help            show this help message and exit
+```
+
 # Extra Info
 
 These python installations are isolated from any version of python that may already be installed on your system. They are installed into `~/.pyvm` by default, but this location can be changed by setting the `$PYVM_HOME` environment variable
@@ -60,7 +89,6 @@ it seems in some cases, portable python fails to find its own lib folder when it
 `pyvm` is still a very young project, and there are many features that have yet to be implemented:
 
 - pipx integration (possibly by bootstrapping the pipx pex file into PYVM_HOME)
-- ability to upgrade python installations when new releases of https://github.com/indygreg/python-build-standalone come out
 - a `--global` flag which will set `$PYVM_HOME` default value to `/opt/pyvm` and `$PYVM_BIN` to `/usr/local/bin`
 - test coverage >=80%
 - windows support

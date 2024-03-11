@@ -77,6 +77,7 @@ https://github.com/indygreg/python-build-standalone project into {os.environ.get
 and add versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
 
 Environment Variables:
+    PYVM_PBS_RELEASE: The release of python-build-standalone to target. Defaults to 'latest', can be set to a release name (eg '20240224')
     PYVM_HOME: The directory to install python versions into. Defaults to $HOME/.pyvm
     PYVM_BIN: The directory to install versioned executables into. Defaults to $HOME/.local/bin
 """
@@ -91,6 +92,7 @@ import re
 import shutil
 import tarfile
 import tempfile
+import subprocess
 from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List
@@ -119,7 +121,8 @@ MACHINE_SUFFIX: Dict[str, Dict[str, Any]] = {
     "Windows": {"AMD64": "x86_64-pc-windows-msvc-shared-install_only.tar.gz"},
 }
 
-GITHUB_API_URL = "https://api.github.com/repos/indygreg/python-build-standalone/releases/latest"
+GITHUB_API_URL = "https://api.github.com/repos/indygreg/python-build-standalone/releases"
+TARGET_RELEASE = os.environ.get("PYVM_PBS_RELEASE", "latest")
 PYTHON_VERSION_REGEX = re.compile(r"cpython-(\d+\.\d+\.\d+)")
 
 WINDOWS = platform.system() == "Windows"
@@ -186,6 +189,18 @@ def uninstall_version(version: str):
     _uninstall_version(version)
     _remove_shim(version)
 
+
+def update_all_versions():
+    available_pythons = _list_pythons()
+    available_pythons = {'.'.join(v.split('.')[:2]): v for v in available_pythons}
+    for major_minor, path in _installed_versions():
+        version = subprocess.check_output([path, '--version']).decode().split()[1]
+        if major_minor in available_pythons and version != available_pythons[major_minor]:
+            _uninstall_version(major_minor)
+            _remove_shim(major_minor)
+            logger.info(f'Updating python {major_minor} from {version} to {available_pythons[major_minor]}...')
+            python_bin = _download_python_build_standalone(major_minor)
+            _ensure_shim(python_bin, major_minor)
 
 
 def _installed_versions():
@@ -327,31 +342,46 @@ def _get_or_update_index():
     """Get or update the index of available python builds from
     the python-build-standalone repository."""
     index_file = PYVM_HOME / "index.json"
+    write_cache = True
     if index_file.exists():
         index = json.loads(index_file.read_text())
-        # update index after 30 days
+        # update index after 5 days
         fetched = datetime.datetime.fromtimestamp(index["fetched"])
-        if datetime.datetime.now() - fetched > datetime.timedelta(days=30):
+        if datetime.datetime.now() - fetched > datetime.timedelta(days=5):
             index = {}
     else:
         index = {}
+    if TARGET_RELEASE != "latest":
+        # we don't want to use the cache if we're targeting a specific release
+        index = {}
+        write_cache = False
     if not index:
         assets = _get_github_release_assets()
         index = {"fetched": datetime.datetime.now().timestamp(), "assets": assets}
         # update index
-        index_file.write_text(json.dumps(index))
+        if write_cache:
+            index_file.write_text(json.dumps(index))
     return index
 
 
 def _get_github_release_assets() -> List[str]:
     """Returns the list of python download links from the latest github release, or a specific python-build-standalone release if specified."""
+    url = GITHUB_API_URL
+    if TARGET_RELEASE == "latest":
+        url += "/latest"
     try:
-        with urlopen(GITHUB_API_URL) as response:
+        with urlopen(url) as response:
             release_data = json.load(response)
 
     except urllib.error.URLError as e:
         # raise
-        raise Exception(f"Unable to fetch python-build-standalone release data (from {GITHUB_API_URL}).") from e
+        raise Exception(f"Unable to fetch python-build-standalone release data (from {url}).") from e
+
+    if TARGET_RELEASE != "latest":
+        release_data = [release for release in release_data if release["tag_name"] == TARGET_RELEASE]
+        if not release_data:
+            raise Exception(f"Unable to find python-build-standalone release {TARGET_RELEASE}.")
+        release_data = release_data[0]
 
     return [asset["browser_download_url"] for asset in release_data["assets"]]
 
@@ -414,6 +444,7 @@ def main():
     install_parser.add_argument('version', nargs='?', help='The version of python to install')
     uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall a python version')
     uninstall_parser.add_argument('version', nargs='?', help='The version of python to install')
+    update_parser = subparsers.add_parser('update', help='Update all installed python versions')
     run_parser = subparsers.add_parser('run', help='Run a python version')
     run_parser.add_argument('version', help='The version of python to run')
     run_parser.add_argument('args', nargs=argparse.REMAINDER, help='Arguments to pass to the python binary')
@@ -431,6 +462,8 @@ def main():
         case 'uninstall':
             assert args.version, 'Please specify a version to uninstall'
             uninstall_version(args.version)
+        case 'update':
+            update_all_versions()
         case 'run':
             bin = ensure_version(args.version)
             os.execl(bin, bin, *args.args)
