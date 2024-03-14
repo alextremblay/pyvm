@@ -82,7 +82,7 @@ Error: Command '['/home/atremblay/pyvm/test312/bin/python3.12', '-m', 'ensurepip
 it seems in some cases, portable python fails to find its own lib folder when it's executed through a symlink. manually setting `$PYTHONHOME` to the installed location of the portable python distribution would fix this issue, but that would require a shim anyway.
 
 
-# Compatability
+# Compatibility
 `pyvm` has been tested in linux (ubuntu x86_64 14.04+ and fedora 32+) and macos (macOS 13.6 aarch64), but should theoretically work in any linux x86_64 or aarch64 distribution (as long as `curl` or `wget` are installed), and any version of macOS
 
 # Stretch goals

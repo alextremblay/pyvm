@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # These values will have to be hard-coded for now until i find a better way to aquire them within this limited bash context
-SELF_PY_VERSION=3.12.1
+SELF_PY_VERSION=3.12.2
 SELF_RELEASE_DATE=20240224
 
 # bootstrap self
@@ -95,10 +95,19 @@ import tempfile
 import subprocess
 from functools import partial
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal, TYPE_CHECKING
 import urllib.error
 from urllib.request import urlopen
 
+
+if TYPE_CHECKING:
+    from typing import overload
+    @overload
+    def _fetch(url: str, type: Literal["json"]) -> dict | list: ...
+    @overload
+    def _fetch(url: str, type: Literal["file"]) -> bytes: ...
+    @overload
+    def _fetch(url: str, type: Literal["checksum"]) -> str: ...
 
 # Much of the code in this module is adapted with extreme gratitude from
 # https://github.com/tusharsadhwani/yen/blob/main/src/yen/github.py
@@ -311,13 +320,30 @@ def _download_python_build_standalone(python_version: str):
 def _download(full_version: str, download_link: str, archive: Path):
     logger.info(f"Downloading python {full_version} build")
     try:
-        # python standalone builds are typically ~32MB in size. to avoid
-        # ballooning memory usage, we read the file in chunks
-        with urlopen(download_link) as response, open(archive, "wb") as file_handle:
-            for data in iter(partial(response.read, 32768), b""):
-                file_handle.write(data)
+        archive.write_bytes(_fetch(download_link, "file"))
+        
     except urllib.error.URLError as e:
         raise Exception(f"Unable to download python {full_version} build.") from e
+
+
+def _fetch(url, type: Literal["json", "file", "checksum"]):
+    # A single mockable function to fetch json, files, or checksums from github
+    if type == "json":
+        with urlopen(url) as response:
+            return json.load(response)
+    elif type == "file":
+        # python standalone builds are typically ~32MB in size. to avoid
+        # ballooning memory usage, we read the file in chunks
+        res = tempfile.TemporaryFile()
+        with urlopen(url) as response:
+            for data in iter(partial(response.read, 32768), b""):
+                res.write(data)
+        res.seek(0)
+        return res.read()
+    elif type == "checksum":
+        return urlopen(url).read().decode().rstrip("\n")
+    else:
+        raise ValueError(f"Argumen `type` must be one of ['json', 'file', 'checksum'], not {type}")
 
 
 def _unpack(full_version, download_link, archive: Path, download_dir: Path):
@@ -328,7 +354,7 @@ def _unpack(full_version, download_link, archive: Path, download_dir: Path):
 
     # Validate checksum
     checksum_link = download_link + ".sha256"
-    expected_checksum = urlopen(checksum_link).read().decode().rstrip("\n")
+    expected_checksum = _fetch(checksum_link, "checksum")
     if checksum != expected_checksum:
         raise Exception(
             f"Checksum mismatch for python {full_version} build. " f"Expected {expected_checksum}, got {checksum}."
@@ -369,10 +395,9 @@ def _get_github_release_assets() -> List[str]:
     url = GITHUB_API_URL
     if TARGET_RELEASE == "latest":
         url += "/latest"
-    try:
-        with urlopen(url) as response:
-            release_data = json.load(response)
 
+    try:
+        release_data = _fetch(url, "json")
     except urllib.error.URLError as e:
         # raise
         raise Exception(f"Unable to fetch python-build-standalone release data (from {url}).") from e
@@ -383,7 +408,7 @@ def _get_github_release_assets() -> List[str]:
             raise Exception(f"Unable to find python-build-standalone release {TARGET_RELEASE}.")
         release_data = release_data[0]
 
-    return [asset["browser_download_url"] for asset in release_data["assets"]]
+    return [asset["browser_download_url"] for asset in release_data["assets"]] # type: ignore
 
 
 def _list_pythons() -> Dict[str, str]:
