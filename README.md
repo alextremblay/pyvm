@@ -1,4 +1,4 @@
-![PyVM Logo](logo.png)
+![PyVM Logo](https://alextremblay.github.io/pyvm/logo.png)
 
 # PyVM
 dead-simple python version manager powered by [python-build-standalone](https://github.com/indygreg/python-build-standalone)
