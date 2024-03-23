@@ -131,13 +131,37 @@ MACHINE_SUFFIX: Dict[str, Dict[str, Any]] = {
 }
 
 GITHUB_API_URL = "https://api.github.com/repos/indygreg/python-build-standalone/releases"
-TARGET_RELEASE = os.environ.get("PYVM_PBS_RELEASE", "latest")
 PYTHON_VERSION_REGEX = re.compile(r"cpython-(\d+\.\d+\.\d+)")
 
 WINDOWS = platform.system() == "Windows"
 PYVM_HOME = Path(os.environ.get('PYVM_HOME', os.path.join(os.environ['HOME'], '.pyvm')))
 PYVM_TMP = PYVM_HOME / 'tmp'
 PYVM_BIN = Path(os.environ.get('PYVM_BIN', os.path.join(os.environ['HOME'], '.local/bin')))
+PYVM_PBS_RELEASE = os.environ.get("PYVM_PBS_RELEASE", "latest")
+
+
+class override:
+    """Helper class to temporarily override module-level variables."""
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+        self.GITHUB_API_URL = GITHUB_API_URL
+        self.PYTHON_VERSION_REGEX = PYTHON_VERSION_REGEX
+        self.PYVM_HOME = PYVM_HOME
+        self.PYVM_TMP = PYVM_TMP
+        self.PYVM_BIN = PYVM_BIN
+        self.PYVM_PBS_RELEASE = PYVM_PBS_RELEASE
+
+
+    def __exit__(self, *args):
+        global GITHUB_API_URL, PYTHON_VERSION_REGEX, PYVM_HOME, PYVM_TMP, PYVM_BIN, PYVM_PBS_RELEASE
+        GITHUB_API_URL = self.GITHUB_API_URL
+        PYTHON_VERSION_REGEX = self.PYTHON_VERSION_REGEX
+        PYVM_HOME = self.PYVM_HOME
+        PYVM_TMP = self.PYVM_TMP
+        PYVM_BIN = self.PYVM_BIN
+        PYVM_PBS_RELEASE = self.PYVM_PBS_RELEASE
 
 
 class NotAvailable(Exception):
@@ -377,7 +401,7 @@ def _get_or_update_index():
             index = {}
     else:
         index = {}
-    if TARGET_RELEASE != "latest":
+    if PYVM_PBS_RELEASE != "latest":
         # we don't want to use the cache if we're targeting a specific release
         index = {}
         write_cache = False
@@ -385,6 +409,7 @@ def _get_or_update_index():
         assets = _get_github_release_assets()
         index = {"fetched": datetime.datetime.now().timestamp(), "assets": assets}
         # update index
+        index_file.parent.mkdir(parents=True, exist_ok=True)
         if write_cache:
             index_file.write_text(json.dumps(index))
     return index
@@ -393,7 +418,7 @@ def _get_or_update_index():
 def _get_github_release_assets() -> List[str]:
     """Returns the list of python download links from the latest github release, or a specific python-build-standalone release if specified."""
     url = GITHUB_API_URL
-    if TARGET_RELEASE == "latest":
+    if PYVM_PBS_RELEASE == "latest":
         url += "/latest"
 
     try:
@@ -402,10 +427,10 @@ def _get_github_release_assets() -> List[str]:
         # raise
         raise Exception(f"Unable to fetch python-build-standalone release data (from {url}).") from e
 
-    if TARGET_RELEASE != "latest":
-        release_data = [release for release in release_data if release["tag_name"] == TARGET_RELEASE]
+    if PYVM_PBS_RELEASE != "latest":
+        release_data = [release for release in release_data if release["tag_name"] == PYVM_PBS_RELEASE]
         if not release_data:
-            raise Exception(f"Unable to find python-build-standalone release {TARGET_RELEASE}.")
+            raise Exception(f"Unable to find python-build-standalone release {PYVM_PBS_RELEASE}.")
         release_data = release_data[0]
 
     return [asset["browser_download_url"] for asset in release_data["assets"]] # type: ignore

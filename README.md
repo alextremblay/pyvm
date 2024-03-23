@@ -37,6 +37,30 @@ Make your script executable and add the following [shebang](https://linuxhandboo
 #!/usr/bin/env pyvm run 3.12
 ```
 
+## I want to use pyvm as a library to manage python distributions in my own application
+
+Install pyvm as a python library from PYPI
+
+```console
+$ pip install python-version-manager
+```
+
+and use it in your application like so:
+
+```python
+import pathlib
+import subprocess
+
+import pyvm
+
+with pyvm.override():
+    pyvm.PYVM_HOME = pathlib.Path('/your/preferred/python/installation/path')
+    pyvm.PYVM_BIN = pathlib.Path('/your/preferred/PATH/directory')
+
+    py311_binary = pyvm.install_version("3.11")
+    assert 'Python 3.11' in subprocess.run([py311_binary, "--version"], capture_output=True).stdout.decode()
+```
+
 # Command Line Interface
 
 ```console

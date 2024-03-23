@@ -1,17 +1,17 @@
 
 [build-system]
-requires = ["hatchling >= 1.6.0"]
+requires = ["hatchling == 1.6.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pyvm-lib"
+name = "python-version-manager" # pyvm was already taken by an unrelated project, and pyvm-lib is too similar to pyvm :(
 description = "dead-simple python version manager powered by python-build-standalone"
 authors = [
     { name = "Alex Tremblay", email = "alex.tremblay@utoronto.ca" },
 ]
 requires-python = ">=3.6"
 readme = "README.md"
-version = "2024.3"
+version = "2024.4"
 
 license = { text = "MIT" }
 
@@ -23,4 +23,4 @@ Homepage = "https://alextremblay.github.io/pyvm/"
 pyvm = "pyvm:main"
 
 [tool.hatch.build]
-packages = ["pyvm"]
+include = ["pyvm.py"]
