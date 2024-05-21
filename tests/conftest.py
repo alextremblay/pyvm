@@ -33,6 +33,11 @@ def fakefs(tmp_path, mocker) -> tuple[Path, Path, Path]:
     PYVM_BIN = PYVM_HOME / "bin"
     PYVM_BIN.mkdir()
     mocker.patch("pyvm.PYVM_BIN", PYVM_BIN)
+
+    # mock os environment variables
+    mocker.patch.dict("os.environ", {"PYVM_HOME": str(PYVM_HOME)})
+    mocker.patch.dict("os.environ", {"PYVM_BIN": str(PYVM_BIN)})
+    
     return PYVM_HOME, PYVM_BIN, tmp_path
 
 

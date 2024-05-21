@@ -1,7 +1,7 @@
 import logging
 import subprocess
 import os
-import pathlib
+import sys
 
 import pytest
 
@@ -19,7 +19,7 @@ def test_install(fakefs, caplog):
     stderr = caplog.text
     assert f"Please add {PYVM_BIN} to your PATH" in stderr
 
-    assert res == PYVM_HOME / "3.11/bin/python3.11"
+    assert res == PYVM_HOME / "3.11/bin/python3"
 
     # check that the shim was created
     shim = PYVM_BIN / "python3.11"
@@ -33,7 +33,7 @@ def test_install(fakefs, caplog):
     assert "3.11" in subprocess.check_output([venv / "bin" / "python", "--version"]).decode()
 
 
-def test_install_unit(fakefs, caplog, mock_fetch):
+def test_install_unit(mock_fetch, fakefs, caplog):
     "Unit test for `pyvm install`"
     test_install(fakefs, caplog)
 
@@ -52,7 +52,7 @@ def test_idempotency(fakefs, caplog):
     assert "Installing python 3.11" not in caplog.text
 
 
-def test_idempotency_unit(fakefs, caplog, mock_fetch):
+def test_idempotency_unit(mock_fetch, fakefs, caplog):
     "Unit test for `pyvm install` idempotency"
     test_idempotency(fakefs, caplog)
 
@@ -90,9 +90,33 @@ def test_update(fakefs, caplog):
     assert "3.11" in subprocess.check_output([venv_bin, "--version"]).decode()
 
 
-def test_update_unit(fakefs, caplog, mock_fetch):
+
+def test_update_unit(mock_fetch, fakefs, caplog):
     "Unit test for `pyvm install`"
     test_update(fakefs, caplog)
+
+
+@pytest.mark.end_to_end
+def test_run(fakefs, caplog):
+    "`pyvm pipx install poetry` should bootstrap python, download the pipx zipapp into PYVM_HOME, and use it to install poetry"
+    PYVM_HOME, PYVM_BIN, tmp = fakefs
+    assert not (PYVM_HOME / "3.12").exists()
+    assert not (tmp / "venv" / "bin" / "python").exists()   
+    assert not (PYVM_BIN / "python3.12").exists()
+
+    subprocess.run([sys.executable, pyvm.__file__, "run", "3.12", "-m", "venv", tmp / "venv"], env=os.environ, check=True)
+    assert (PYVM_HOME / "3.12").exists()
+    assert (tmp / "venv" / "bin" / "python").exists() 
+
+    # the run command should not create a shim in user's PATH.
+    # That would be an unexpected side effect  
+    assert not (PYVM_BIN / "python3.12").exists()  
+
+
+def test_run_unit(mock_fetch, fakefs, caplog):
+    "Unit test for `pyvm run`"
+    test_run(fakefs, caplog)
+
 
 
 def test_override(fakefs, mock_fetch, tmp_path):
@@ -112,7 +136,7 @@ def test_override(fakefs, mock_fetch, tmp_path):
     assert (tmp_path / "bin" / "python3.11").exists()
 
     assert not (original_home / "3.11" / "bin" / "python3.11").exists()
-    assert not (original_bin / "python3.11").exists()
+    assert not (original_bin / "python3").exists()
     
     assert pyvm.PYVM_HOME == original_home
     assert pyvm.PYVM_BIN == original_bin
