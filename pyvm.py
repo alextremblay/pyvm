@@ -221,7 +221,7 @@ def ensure_version(version: str):
     if python_bin := _installed_version(version):
         return python_bin
     else:
-        return install_version(version)
+        return _download_python_build_standalone(version)
 
 
 def uninstall_version(version: str):
