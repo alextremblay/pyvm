@@ -70,6 +70,7 @@ exec "$PYVM_HOME/3.12/bin/python3.12" "$0" "$@"
 
 # ruff: noqa: E401 EXE003 A001
 import os
+
 __doc__ = f"""Python Version Manager
 
 This tool is designed to download and install python versions from the 
@@ -102,12 +103,14 @@ from urllib.request import urlopen
 
 if TYPE_CHECKING:
     from typing import overload
+
     @overload
     def _fetch(url: str, type: Literal["json"]) -> dict | list: ...
     @overload
     def _fetch(url: str, type: Literal["file"]) -> bytes: ...
     @overload
     def _fetch(url: str, type: Literal["checksum"]) -> str: ...
+
 
 # Much of the code in this module is adapted with extreme gratitude from
 # https://github.com/tusharsadhwani/yen/blob/main/src/yen/github.py
@@ -130,13 +133,17 @@ MACHINE_SUFFIX: Dict[str, Dict[str, Any]] = {
     "Windows": {"AMD64": "x86_64-pc-windows-msvc-shared-install_only.tar.gz"},
 }
 
-GITHUB_API_URL = "https://api.github.com/repos/indygreg/python-build-standalone/releases"
+GITHUB_API_URL = (
+    "https://api.github.com/repos/indygreg/python-build-standalone/releases"
+)
 PYTHON_VERSION_REGEX = re.compile(r"cpython-(\d+\.\d+\.\d+)")
 
 WINDOWS = platform.system() == "Windows"
-PYVM_HOME = Path(os.environ.get('PYVM_HOME', os.path.join(os.environ['HOME'], '.pyvm')))
-PYVM_TMP = PYVM_HOME / 'tmp'
-PYVM_BIN = Path(os.environ.get('PYVM_BIN', os.path.join(os.environ['HOME'], '.local/bin')))
+PYVM_HOME = Path(os.environ.get("PYVM_HOME", os.path.join(os.environ["HOME"], ".pyvm")))
+PYVM_TMP = PYVM_HOME / "tmp"
+PYVM_BIN = Path(
+    os.environ.get("PYVM_BIN", os.path.join(os.environ["HOME"], ".local/bin"))
+)
 PYVM_PBS_RELEASE = os.environ.get("PYVM_PBS_RELEASE", "latest")
 
 
@@ -174,19 +181,19 @@ logger = logging.getLogger(__name__)
 def list_installed_versions():
     installations_found = False
     for major_minor, path in _installed_versions():
-        msg = f'python{major_minor} is installed'
+        msg = f"python{major_minor} is installed"
         _ensure_shim(path, major_minor)
         logger.info(msg)
         installations_found = True
     if not installations_found:
-        logger.info('No python installations installed through pyvm')
+        logger.info("No python installations installed through pyvm")
 
 
 def list_available_versions():
     pythons = _list_pythons()
     installed_pythons = [major_minor for major_minor, _ in _installed_versions()]
     logger.info("Available python versions:")
-    pythons = [version.split('.') for version in pythons]
+    pythons = [version.split(".") for version in pythons]
     pythons = sorted(pythons, key=lambda version: [int(k) for k in version])
     for version in pythons:
         major, minor, patch, *_ = version
@@ -200,9 +207,9 @@ def install_version(version: str):
     """Install the given python version and return the path to the python binary."""
     version = _normalize_python_version(version)
     if python_bin := _installed_version(version):
-        logger.warning(f'Python version {version} is already installed')
+        logger.warning(f"Python version {version} is already installed")
         return python_bin
-    logger.info(f'Installing python {version}...')
+    logger.info(f"Installing python {version}...")
     python_bin = _download_python_build_standalone(version)
     _ensure_shim(python_bin, version)
     return python_bin
@@ -211,7 +218,7 @@ def install_version(version: str):
 def ensure_version(version: str):
     """Ensure that the given python version is installed and return the path to the python binary."""
     version = _normalize_python_version(version)
-    if (python_bin := _installed_version(version)):
+    if python_bin := _installed_version(version):
         return python_bin
     else:
         return install_version(version)
@@ -225,21 +232,26 @@ def uninstall_version(version: str):
 
 def update_all_versions():
     available_pythons = _list_pythons()
-    available_pythons = {'.'.join(v.split('.')[:2]): v for v in available_pythons}
+    available_pythons = {".".join(v.split(".")[:2]): v for v in available_pythons}
     for major_minor, path in _installed_versions():
-        version = subprocess.check_output([path, '--version']).decode().split()[1]
-        if major_minor in available_pythons and version != available_pythons[major_minor]:
+        version = subprocess.check_output([path, "--version"]).decode().split()[1]
+        if (
+            major_minor in available_pythons
+            and version != available_pythons[major_minor]
+        ):
             _uninstall_version(major_minor)
             _remove_shim(major_minor)
-            logger.info(f'Updating python {major_minor} from {version} to {available_pythons[major_minor]}...')
+            logger.info(
+                f"Updating python {major_minor} from {version} to {available_pythons[major_minor]}..."
+            )
             python_bin = _download_python_build_standalone(major_minor)
             _ensure_shim(python_bin, major_minor)
 
 
 def _installed_versions():
-    for installed_version in PYVM_HOME.glob('3.*/bin'):
+    for installed_version in PYVM_HOME.glob("3.*/bin"):
         major_minor = installed_version.parent.name
-        installed_bin = installed_version / f'python{major_minor}'
+        installed_bin = installed_version / f"python{major_minor}"
         yield major_minor, installed_bin
 
 
@@ -252,22 +264,22 @@ def _installed_version(version: str):
 
 def _uninstall_version(version: str):
     if not _installed_version(version):
-        logger.warning(f'Python version {version} is not installed')
+        logger.warning(f"Python version {version} is not installed")
         return
     shutil.rmtree(PYVM_HOME / version)
-    logger.info(f'Uninstalled python {version}')
+    logger.info(f"Uninstalled python {version}")
 
 
 def _ensure_shim(path: Path, version: str):
     """Ensure that the python binary is available in the pyvm bin directory"""
-    # This needs to be a shim, rather than a symlink, for reasons explained in the README, 
+    # This needs to be a shim, rather than a symlink, for reasons explained in the README,
     # under heading `## Why a shim, and not a symlink?`
     # The shim sets the TERMINFO_DIRS environment variable to include most common terminfo directories
     # as a workaround to https://gregoryszorc.com/docs/python-build-standalone/main/quirks.html#backspace-key-doesn-t-work-in-python-repl
     _ensure_pyvm_bin_dir()
-    shim = Path(PYVM_BIN / f'python{version}')
+    shim = Path(PYVM_BIN / f"python{version}")
     if not shim.exists():
-        logger.info(f'Creating shim for {version} at {shim}')
+        logger.info(f"Creating shim for {version} at {shim}")
         shim.write_text(f'#!/bin/sh\nexec {path} "$@"\n')
         shim.chmod(0o755)
     return shim
@@ -275,23 +287,25 @@ def _ensure_shim(path: Path, version: str):
 
 def _ensure_pyvm_bin_dir():
     Path(PYVM_BIN).mkdir(parents=True, exist_ok=True)
-    for bin_dir in os.environ['PATH'].split(os.pathsep):
+    for bin_dir in os.environ["PATH"].split(os.pathsep):
         if PYVM_BIN.samefile(bin_dir):
             return
     else:
-        logger.warning(f'Please add {PYVM_BIN} to your PATH')
-        logger.warning(f'Ex, add the following to your shell profile: export PATH=$PATH:{PYVM_BIN}')
+        logger.warning(f"Please add {PYVM_BIN} to your PATH")
+        logger.warning(
+            f"Ex, add the following to your shell profile: export PATH=$PATH:{PYVM_BIN}"
+        )
 
 
 def _remove_shim(version: str):
     # only remove the shim if it points to the version we're uninstalling
-    shim = PYVM_BIN / f'python{version}'
+    shim = PYVM_BIN / f"python{version}"
     path = _installed_version(version)
     if not path:
         return
     if str(path) in shim.read_text():
         shim.unlink()
-        logger.info(f'Removed {shim}')
+        logger.info(f"Removed {shim}")
 
 
 def _normalize_python_version(python_version: str) -> str:
@@ -303,24 +317,29 @@ def _normalize_python_version(python_version: str) -> str:
 def _download_python_build_standalone(python_version: str):
     """Attempt to download and use an appropriate python build
     from https://github.com/indygreg/python-build-standalone
-    and unpack it into the PYVM_HOME directory. 
+    and unpack it into the PYVM_HOME directory.
     Returns the full path to the python binary within that build"""
-    python_bin = "python.exe" if WINDOWS else f"python{python_version}"
 
     install_dir = PYVM_HOME / python_version
-    installed_python = install_dir / "bin" / python_bin
+    installed_python = (
+        install_dir / "python.exe" if WINDOWS else install_dir / "bin" / "python3"
+    )
 
     if installed_python.exists():
         return installed_python
 
     if install_dir.exists():
-        logger.warning(f"A previous attempt to install python {python_version} failed. Retrying.")
+        logger.warning(
+            f"A previous attempt to install python {python_version} failed. Retrying."
+        )
         shutil.rmtree(install_dir)
 
     try:
         full_version, download_link = _resolve_python_version(python_version)
     except NotAvailable as e:
-        raise Exception(f"Unable to acquire a standalone python build matching {python_version}.") from e
+        raise Exception(
+            f"Unable to acquire a standalone python build matching {python_version}."
+        ) from e
 
     with tempfile.TemporaryDirectory() as tempdir:
         archive = Path(tempdir) / f"python-{full_version}.tar.gz"
@@ -367,7 +386,9 @@ def _fetch(url, type: Literal["json", "file", "checksum"]):
     elif type == "checksum":
         return urlopen(url).read().decode().rstrip("\n")
     else:
-        raise ValueError(f"Argumen `type` must be one of ['json', 'file', 'checksum'], not {type}")
+        raise ValueError(
+            f"Argumen `type` must be one of ['json', 'file', 'checksum'], not {type}"
+        )
 
 
 def _unpack(full_version, download_link, archive: Path, download_dir: Path):
@@ -381,7 +402,8 @@ def _unpack(full_version, download_link, archive: Path, download_dir: Path):
     expected_checksum = _fetch(checksum_link, "checksum")
     if checksum != expected_checksum:
         raise Exception(
-            f"Checksum mismatch for python {full_version} build. " f"Expected {expected_checksum}, got {checksum}."
+            f"Checksum mismatch for python {full_version} build. "
+            f"Expected {expected_checksum}, got {checksum}."
         )
 
     with tarfile.open(archive, mode="r:gz") as tar:
@@ -425,15 +447,23 @@ def _get_github_release_assets() -> List[str]:
         release_data = _fetch(url, "json")
     except urllib.error.URLError as e:
         # raise
-        raise Exception(f"Unable to fetch python-build-standalone release data (from {url}).") from e
+        raise Exception(
+            f"Unable to fetch python-build-standalone release data (from {url})."
+        ) from e
 
     if PYVM_PBS_RELEASE != "latest":
-        release_data = [release for release in release_data if release["tag_name"] == PYVM_PBS_RELEASE]
+        release_data = [
+            release
+            for release in release_data
+            if release["tag_name"] == PYVM_PBS_RELEASE
+        ]
         if not release_data:
-            raise Exception(f"Unable to find python-build-standalone release {PYVM_PBS_RELEASE}.")
+            raise Exception(
+                f"Unable to find python-build-standalone release {PYVM_PBS_RELEASE}."
+            )
         release_data = release_data[0]
 
-    return [asset["browser_download_url"] for asset in release_data["assets"]] # type: ignore
+    return [asset["browser_download_url"] for asset in release_data["assets"]]  # type: ignore
 
 
 def _list_pythons() -> Dict[str, str]:
@@ -448,13 +478,17 @@ def _list_pythons() -> Dict[str, str]:
 
     python_assets = _get_or_update_index()["assets"]
 
-    available_python_links = [link for link in python_assets if link.endswith(download_link_suffix)]
+    available_python_links = [
+        link for link in python_assets if link.endswith(download_link_suffix)
+    ]
 
     python_versions: dict[str, str] = {}
     for link in available_python_links:
         match = PYTHON_VERSION_REGEX.search(link)
         if match is None:
-            logger.warning(f"Could not parse python version from link {link}. Skipping.")
+            logger.warning(
+                f"Could not parse python version from link {link}. Skipping."
+            )
             continue
         python_version = match[1]
         python_versions[python_version] = link
@@ -486,40 +520,53 @@ def _resolve_python_version(requested_version: str):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, stream=sys.stderr, format='%(message)s')
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    subparsers = parser.add_subparsers(dest='command')
-    list_parser = subparsers.add_parser('list', help='List installed python versions')
-    install_parser = subparsers.add_parser('install', help='Install a python version')
-    install_parser.add_argument('version', nargs='?', help='The version of python to install')
-    uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall a python version')
-    uninstall_parser.add_argument('version', nargs='?', help='The version of python to install')
-    update_parser = subparsers.add_parser('update', help='Update all installed python versions')
-    run_parser = subparsers.add_parser('run', help='Run a python version')
-    run_parser.add_argument('version', help='The version of python to run')
-    run_parser.add_argument('args', nargs=argparse.REMAINDER, help='Arguments to pass to the python binary')
-    
-    args= parser.parse_args()
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(message)s")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    subparsers = parser.add_subparsers(dest="command")
+    list_parser = subparsers.add_parser("list", help="List installed python versions")
+    install_parser = subparsers.add_parser("install", help="Install a python version")
+    install_parser.add_argument(
+        "version", nargs="?", help="The version of python to install"
+    )
+    uninstall_parser = subparsers.add_parser(
+        "uninstall", help="Uninstall a python version"
+    )
+    uninstall_parser.add_argument(
+        "version", nargs="?", help="The version of python to install"
+    )
+    update_parser = subparsers.add_parser(
+        "update", help="Update all installed python versions"
+    )
+    run_parser = subparsers.add_parser("run", help="Run a python version")
+    run_parser.add_argument("version", help="The version of python to run")
+    run_parser.add_argument(
+        "args", nargs=argparse.REMAINDER, help="Arguments to pass to the python binary"
+    )
+
+    args = parser.parse_args()
 
     match args.command:
-        case 'list':
+        case "list":
             list_installed_versions()
-        case 'install':
+        case "install":
             if not args.version:
                 list_available_versions()
                 exit(1)
             install_version(args.version)
-        case 'uninstall':
-            assert args.version, 'Please specify a version to uninstall'
+        case "uninstall":
+            assert args.version, "Please specify a version to uninstall"
             uninstall_version(args.version)
-        case 'update':
+        case "update":
             update_all_versions()
-        case 'run':
+        case "run":
             bin = ensure_version(args.version)
             os.execl(bin, bin, *args.args)
         case None:
             parser.print_help()
             exit(1)
+
 
 if __name__ == "__main__":
     main()
