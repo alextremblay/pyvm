@@ -79,6 +79,7 @@ and add versioned executables (ie `python3.12` for python 3.12) into a directory
 
 Environment Variables:
     PYVM_PBS_RELEASE: The release of python-build-standalone to target. Defaults to 'latest', can be set to a release name (eg '20240224')
+    PYVM_PIPX_RELEASE: The release of pipx to target. Defaults to 'latest', can be set to a release name (eg '1.5.0')
     PYVM_HOME: The directory to install python versions into. Defaults to $HOME/.pyvm
     PYVM_BIN: The directory to install versioned executables into. Defaults to $HOME/.local/bin
 """
@@ -136,6 +137,7 @@ MACHINE_SUFFIX: Dict[str, Dict[str, Any]] = {
 GITHUB_API_URL = (
     "https://api.github.com/repos/indygreg/python-build-standalone/releases"
 )
+PIPX_API_URL = "https://api.github.com/repos/pypa/pipx/releases"
 PYTHON_VERSION_REGEX = re.compile(r"cpython-(\d+\.\d+\.\d+)")
 
 WINDOWS = platform.system() == "Windows"
@@ -145,30 +147,40 @@ PYVM_BIN = Path(
     os.environ.get("PYVM_BIN", os.path.join(os.environ["HOME"], ".local/bin"))
 )
 PYVM_PBS_RELEASE = os.environ.get("PYVM_PBS_RELEASE", "latest")
+PYVM_PIPX_RELEASE = os.environ.get("PYVM_PIPX_RELEASE", "latest")
+PYVM_PIPX_DEFAULT_PYTHON_VERSION = os.environ.get("PYVM_PIPX_DEFAULT_PYTHON_VERSION", "3.12")
 
 
 class override:
     """Helper class to temporarily override module-level variables."""
+    # TODO: there has got to be a better way to do this
+
     def __init__(self):
         pass
 
     def __enter__(self):
         self.GITHUB_API_URL = GITHUB_API_URL
+        self.PIPX_API_URL = PIPX_API_URL
         self.PYTHON_VERSION_REGEX = PYTHON_VERSION_REGEX
         self.PYVM_HOME = PYVM_HOME
         self.PYVM_TMP = PYVM_TMP
         self.PYVM_BIN = PYVM_BIN
         self.PYVM_PBS_RELEASE = PYVM_PBS_RELEASE
-
+        self.PYVM_PIPX_RELEASE = PYVM_PIPX_RELEASE
+        self.PYVM_PIPX_DEFAULT_PYTHON_VERSION = PYVM_PIPX_DEFAULT_PYTHON_VERSION
 
     def __exit__(self, *args):
-        global GITHUB_API_URL, PYTHON_VERSION_REGEX, PYVM_HOME, PYVM_TMP, PYVM_BIN, PYVM_PBS_RELEASE
+        global GITHUB_API_URL, PIPX_API_URL, PYTHON_VERSION_REGEX, PYVM_HOME, PYVM_TMP, PYVM_BIN
+        global PYVM_PBS_RELEASE, PYVM_PIPX_RELEASE, PYVM_PIPX_DEFAULT_PYTHON_VERSION
         GITHUB_API_URL = self.GITHUB_API_URL
+        PIPX_API_URL = self.PIPX_API_URL
         PYTHON_VERSION_REGEX = self.PYTHON_VERSION_REGEX
         PYVM_HOME = self.PYVM_HOME
         PYVM_TMP = self.PYVM_TMP
         PYVM_BIN = self.PYVM_BIN
         PYVM_PBS_RELEASE = self.PYVM_PBS_RELEASE
+        PYVM_PIPX_RELEASE = self.PYVM_PIPX_RELEASE
+        PYVM_PIPX_DEFAULT_PYTHON_VERSION = self.PYVM_PIPX_DEFAULT_PYTHON_VERSION
 
 
 class NotAvailable(Exception):
@@ -231,6 +243,7 @@ def uninstall_version(version: str):
 
 
 def update_all_versions():
+    maybe_update_pipx()
     available_pythons = _list_pythons()
     available_pythons = {".".join(v.split(".")[:2]): v for v in available_pythons}
     for major_minor, path in _installed_versions():
@@ -246,6 +259,61 @@ def update_all_versions():
             )
             python_bin = _download_python_build_standalone(major_minor)
             _ensure_shim(python_bin, major_minor)
+
+
+def maybe_update_pipx():
+    "Update pipx, but only if it's already been downloaded"
+    pipx_zipapp = PYVM_HOME / "pipx.pyz"
+    if pipx_zipapp.exists():
+        logger.info("Updating pipx...")
+        download_pipx()
+
+
+def download_pipx():
+    # step one: get the latest release of pipx
+    # TODO: a lot of this logic is pulled from _get_github_release_assets. i should refactor that function to be more generic
+    url = PIPX_API_URL
+    if PYVM_PIPX_RELEASE == "latest":
+        url += "/latest"
+    release_data = _fetch(url, "json")
+    if PYVM_PIPX_RELEASE != "latest":
+        release_data = [
+            release
+            for release in release_data
+            if release["tag_name"] == PYVM_PIPX_RELEASE
+        ]
+        if not release_data:
+            raise Exception(f"Unable to find pipx release {PYVM_PIPX_RELEASE}.")
+        release_data = release_data[0]
+    pyz_download_url = [
+        asset["browser_download_url"]
+        for asset in release_data["assets"] # type: ignore
+        if asset["name"].endswith(".pyz")
+    ][0]
+    _download("pipx.pyz", pyz_download_url, PYVM_HOME / "pipx.pyz")
+    return PYVM_HOME / "pipx.pyz"
+
+
+def ensure_pipx():
+    """Ensure that pipx is installed and return the path to the pipx zipapp."""
+    pipx_zipapp = PYVM_HOME / "pipx.pyz"
+    if pipx_zipapp.exists():
+        return pipx_zipapp
+    logger.info("Aquiring pipx...")
+    pipx_zipapp = download_pipx()
+    return pipx_zipapp
+
+
+def install_pipx():
+    """Download the pipx zipapp into PYVM_HOME and install a shim into PYVM_BIN."""
+    pipx_zipapp = ensure_pipx()
+    default_python = ensure_version(PYVM_PIPX_DEFAULT_PYTHON_VERSION)
+    shim = PYVM_BIN / "pipx"
+    if not shim.exists():
+        logger.info(f"Creating shim for pipx at {shim}")
+        shim.write_text(f'#!/bin/sh\nexec {default_python} {pipx_zipapp} "$@"\n')
+        shim.chmod(0o755)
+    return shim
 
 
 def _installed_versions():
@@ -346,7 +414,7 @@ def _download_python_build_standalone(python_version: str):
         download_dir = Path(tempdir) / "download"
 
         # download the python build gz
-        _download(full_version, download_link, archive)
+        _download(f"python {full_version} build", download_link, archive)
 
         # unpack the python build
         _unpack(full_version, download_link, archive, download_dir)
@@ -360,13 +428,13 @@ def _download_python_build_standalone(python_version: str):
     return installed_python
 
 
-def _download(full_version: str, download_link: str, archive: Path):
-    logger.info(f"Downloading python {full_version} build")
+def _download(what: str, from_url: str, to_path: Path):
+    logger.info(f"Downloading {what}")
     try:
-        archive.write_bytes(_fetch(download_link, "file"))
-        
+        to_path.write_bytes(_fetch(from_url, "file"))
+
     except urllib.error.URLError as e:
-        raise Exception(f"Unable to download python {full_version} build.") from e
+        raise Exception(f"Unable to download {what}.") from e
 
 
 def _fetch(url, type: Literal["json", "file", "checksum"]):
@@ -544,6 +612,11 @@ def main():
     run_parser.add_argument(
         "args", nargs=argparse.REMAINDER, help="Arguments to pass to the python binary"
     )
+    pipx_parser = subparsers.add_parser("pipx", help="Run pipx")
+    pipx_parser.add_argument("version", help="The version of python to run pipx with")
+    pipx_parser.add_argument(
+        "args", nargs=argparse.REMAINDER, help="Arguments to pass to pipx"
+    )
 
     args = parser.parse_args()
 
@@ -563,6 +636,10 @@ def main():
         case "run":
             bin = ensure_version(args.version)
             os.execl(bin, bin, *args.args)
+        case "pipx":
+            bin = ensure_version(args.version)
+            pipx_zipapp = ensure_pipx()
+            os.execl(bin, bin, pipx_zipapp, *args.args)
         case None:
             parser.print_help()
             exit(1)
