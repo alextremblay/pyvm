@@ -78,10 +78,11 @@ https://github.com/indygreg/python-build-standalone project into {os.environ.get
 and add versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
 
 Environment Variables:
-    PYVM_PBS_RELEASE: The release of python-build-standalone to target. Defaults to 'latest', can be set to a release name (eg '20240224')
-    PYVM_PIPX_RELEASE: The release of pipx to target. Defaults to 'latest', can be set to a release name (eg '1.5.0')
     PYVM_HOME: The directory to install python versions into. Defaults to $HOME/.pyvm
     PYVM_BIN: The directory to install versioned executables into. Defaults to $HOME/.local/bin
+    PYVM_PBS_RELEASE: The release of python-build-standalone to target. Defaults to 'latest', can be set to a release name (eg '20240224')
+    PYVM_PIPX_RELEASE: The release of pipx to target. Defaults to 'latest', can be set to a release name (eg '1.5.0')
+    PYVM_PIPX_DEFAULT_PYTHON_VERSION: The default python version to use when installing pipx onto your PATH. Defaults to '3.12'
 """
 import sys
 import argparse

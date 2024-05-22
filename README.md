@@ -19,6 +19,8 @@ echo 'export PATH="$PATH:~/.local/bin"' >> ~/.bashrc
 # features
 - Can manage multiple portable python installations sourced from the amazing [PBS](https://github.com/indygreg/python-build-standalone) project
 - installs python versions to isolated location, doesn't interfere with or interact with any version of python installed/used by your operating system
+- Can cache and run python installations without altering your PATH
+- Can bootstrap and run pipx commands without needing to install any pipx or python version beforehand
 
 # Use Cases
 
@@ -61,11 +63,114 @@ with pyvm.override():
     assert 'Python 3.11' in subprocess.run([py311_binary, "--version"], capture_output=True).stdout.decode()
 ```
 
+## I want to run a python script without installing anything in my PATH (including pyvm)
+
+This works too! 
+
+Assuming you have a script called `myscript.py`, simply download pyvm to your current directory and run it:
+
+```console
+$ curl -sSfLo ./pyvm alextremblay.github.io/pyvm/pyvm.py && chmod +x ./pyvm
+
+$ ./pyvm run 3.12 myscript.py
+```
+
+
+## I want to run a script that has dependencies, installing nothing other than pyvm
+
+Let's say you have a script called `myscript.py`, and it depends on external PYPI packages `requests` and `rich`
+
+you want to be able to run this script as a shell script/command and have it bootstrap its preferred python version (eg 3.11) AND all of its dependencies
+
+That's a tall order! but with PyVM installed, it's possible!
+
+Add this code block to the top of your script:
+
+```sh
+#!/usr/bin/env -S pyvm pipx 3.11 run --path
+
+# /// script
+# dependencies = [
+#   "requests",
+#   "rich",
+# ]
+# ///
+```
+
+Then make your script executable:
+
+```console
+$ chmod +x ./myscript.py
+```
+
+and run it!
+
+```console
+$ ./myscript.py
+```
+
+## I want to share a script with colleagues that requires NO pre-installed dependencies (even on PyVM)
+
+You wrote a script that requires a specific version of python, specific dependencies/libraries installed,
+
+and you want to be able to send your script to friends and colleagues such that they can execute your script and have it bootstrap all of its own dependencies, without having to install any other software before running your script, not even PyVM itself...
+
+Well, this will look weird, but it works! and it should work on every POSIX-compliant python-build-standalone-compatible UNIX OS
+
+`example.py`:
+```python
+#!/bin/bash
+""":"
+set -euo pipefail
+
+PYTHON_VERSION="3.12"
+
+HERE="$( dirname -- "$( readlink -f -- "$0"; )"; )"
+PYVM="$HERE/pyvm"
+if [ ! -f "$PYVM" ]; then
+
+  # define a function which selects curl or wget based on availability
+  download() {
+      if command -v curl &> /dev/null; then
+          curl -s -L -o $1 $2
+      elif command -v wget &> /dev/null; then
+          wget -q -O $1 $2
+      else
+          echo "Neither curl nor wget found. Please install one of these packages."
+          exit 1
+      fi
+  }
+
+  echo "Bootstrapping PyVM..."
+  download $PYVM alextremblay.github.io/pyvm/pyvm.py
+  chmod +x $PYVM
+
+fi
+
+exec "$PYVM" pipx $PYTHON_VERSION run --path "$0" "$@"
+"""
+
+# /// script
+# dependencies = [
+#   "requests",
+#   "rich",
+# ]
+# ///
+
+
+import requests
+from rich import print
+
+print(requests.get("https://httpbin.org").text)
+```
+
+You set your preferred python version with the shell variable on line 5, you set your dependencies within the `# /// script` comment block, and your python code goes in after the `# ///` at the end of the comment block
+
 # Command Line Interface
 
 ```console
 $ pyvm -h
-usage: pyvm [-h] {list,install,uninstall,update,run} ...
+usage: pyvm [-h] {list,install,uninstall,update,run,pipx} ...
 
 Python Version Manager
 
@@ -74,17 +179,20 @@ https://github.com/indygreg/python-build-standalone project into /home/atremblay
 and add versioned executables (ie `python3.12` for python 3.12) into a directory on the PATH.
 
 Environment Variables:
-    PYVM_PBS_RELEASE: The release of python-build-standalone to target. Defaults to 'latest', can be set to a release name (eg '20240224')
     PYVM_HOME: The directory to install python versions into. Defaults to $HOME/.pyvm
     PYVM_BIN: The directory to install versioned executables into. Defaults to $HOME/.local/bin
+    PYVM_PBS_RELEASE: The release of python-build-standalone to target. Defaults to 'latest', can be set to a release name (eg '20240224')
+    PYVM_PIPX_RELEASE: The release of pipx to target. Defaults to 'latest', can be set to a release name (eg '1.5.0')
+    PYVM_PIPX_DEFAULT_PYTHON_VERSION: The default python version to use when installing pipx onto your PATH. Defaults to '3.12'
 
 positional arguments:
-  {list,install,uninstall,update,run}
+  {list,install,uninstall,update,run,pipx}
     list                List installed python versions
     install             Install a python version
     uninstall           Uninstall a python version
     update              Update all installed python versions
     run                 Run a python version
+    pipx                Run pipx
 
 options:
   -h, --help            show this help message and exit
@@ -112,7 +220,6 @@ it seems in some cases, portable python fails to find its own lib folder when it
 # Stretch goals
 `pyvm` is still a very young project, and there are many features that have yet to be implemented:
 
-- pipx integration (possibly by bootstrapping the pipx pex file into PYVM_HOME)
 - a `--global` flag which will set `$PYVM_HOME` default value to `/opt/pyvm` and `$PYVM_BIN` to `/usr/local/bin`
 - test coverage >=80%
 - windows support
